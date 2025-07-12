@@ -24,49 +24,61 @@ internal partial class BLM : Caster
             if (OccultCrescent.ShouldUsePhantomActions())
                 return OccultCrescent.BestPhantomAction();
 
+            // OGCD Weaving - Optimized Priority
             if (CanSpellWeave() && !HasDoubleWeaved())
             {
+                // Amplifier on cooldown for max Polyglot generation
                 if (ActionReady(Amplifier) && !HasMaxPolyglotStacks)
                     return Amplifier;
 
+                // Ley Lines without restriction for maximum uptime
                 if (ActionReady(LeyLines) && !HasStatusEffect(Buffs.LeyLines))
                     return LeyLines;
 
+                // End of Fire Phase actions
                 if (EndOfFirePhase)
                 {
-                    if (ActionReady(Manafont) && EndOfFirePhase)
+                    // Manafont for additional Astral Fire cycle
+                    if (ActionReady(Manafont))
                         return Manafont;
 
+                    // Swiftcast after Despair for smooth transition
                     if (ActionReady(Role.Swiftcast) && JustUsed(Despair) &&
                         !ActionReady(Manafont) && !HasStatusEffect(Buffs.Triplecast))
                         return Role.Swiftcast;
 
+                    // Transpose with instant cast buffs for optimization
                     if (ActionReady(Transpose) && (HasStatusEffect(Role.Buffs.Swiftcast) || HasStatusEffect(Buffs.Triplecast)))
                         return Transpose;
                 }
 
+                // Ice Phase optimizations
                 if (IcePhase)
                 {
+                    // Quick Transpose after Paradox when MP is full
                     if (JustUsed(Paradox) && CurMp is MP.MaxMP)
                         return Transpose;
 
+                    // Swiftcast for Blizzard III when not at 3 stacks
                     if (ActionReady(Blizzard3) && UmbralIceStacks < 3 &&
                         ActionReady(Role.Swiftcast) && !HasStatusEffect(Buffs.Triplecast))
                         return Role.Swiftcast;
                 }
 
+                // Emergency Manaward
                 if (ActionReady(Manaward) && PlayerHealthPercentageHp() < 25)
                     return Manaward;
             }
 
+            // Movement handling for low levels
             if (IsMoving() && !LevelChecked(Triplecast))
                 return Scathe;
 
+            // Polyglot overcap protection - CRITICAL
             if (HasMaxPolyglotStacks && PolyglotTimer <= 5000)
-                return LevelChecked(Xenoglossy)
-                    ? Xenoglossy
-                    : Foul;
+                return LevelChecked(Xenoglossy) ? Xenoglossy : Foul;
 
+            // Thunder DoT management - Use when falling off, not on schedule
             if (LevelChecked(Thunder) && HasStatusEffect(Buffs.Thunderhead) &&
                 CanApplyStatus(CurrentTarget, ThunderList[OriginalHook(Thunder)]) &&
                 (ThunderDebuffST is null && ThunderDebuffAoE is null ||
@@ -75,19 +87,23 @@ internal partial class BLM : Caster
                 GetTargetHPPercent() > 0)
                 return OriginalHook(Thunder);
 
+            // Polyglot usage before Amplifier comes off cooldown
             if (LevelChecked(Amplifier) &&
                 GetCooldownRemainingTime(Amplifier) < 5 &&
                 HasMaxPolyglotStacks)
                 return Xenoglossy;
 
+            // Movement priority system (Patch 7.2 optimized)
             if (IsMoving() && InCombat())
             {
+                // Triplecast for movement (no longer saves time, just for mobility)
                 if (ActionReady(Triplecast) &&
                     !HasStatusEffect(Buffs.Triplecast) &&
                     !HasStatusEffect(Role.Buffs.Swiftcast) &&
                     !HasStatusEffect(Buffs.LeyLines))
                     return Triplecast;
 
+                // Paradox movement in Fire Phase
                 if (ActionReady(Paradox) &&
                     FirePhase && ActiveParadox &&
                     !HasStatusEffect(Buffs.Firestarter) &&
@@ -95,30 +111,31 @@ internal partial class BLM : Caster
                     !HasStatusEffect(Role.Buffs.Swiftcast))
                     return OriginalHook(Paradox);
 
+                // Swiftcast for movement
                 if (ActionReady(Role.Swiftcast) && !HasStatusEffect(Buffs.Triplecast))
                     return Role.Swiftcast;
 
+                // Xenoglossy for movement (instant cast)
                 if (HasPolyglotStacks() &&
                     !HasStatusEffect(Buffs.Triplecast) &&
                     !HasStatusEffect(Role.Buffs.Swiftcast))
-                    return LevelChecked(Xenoglossy)
-                        ? Xenoglossy
-                        : Foul;
+                    return LevelChecked(Xenoglossy) ? Xenoglossy : Foul;
             }
 
+            // FIRE PHASE - Optimized 6 Fire IV + 1 Paradox rotation
             if (FirePhase)
             {
-                // TODO: Revisit when Raid Buff checks are in place
-                if ((PolyglotStacks > 1))
-                    return LevelChecked(Xenoglossy)
-                        ? Xenoglossy
-                        : Foul;
+                // Use Xenoglossy if we have multiple stacks (better than overcapping)
+                if (PolyglotStacks > 1)
+                    return LevelChecked(Xenoglossy) ? Xenoglossy : Foul;
 
+                // Firestarter proc usage - prioritize early use for better flow
                 if ((LevelChecked(Paradox) && HasStatusEffect(Buffs.Firestarter) ||
                      TimeSinceFirestarterBuff >= 2) && AstralFireStacks < 3 ||
                     !LevelChecked(Fire4) && TimeSinceFirestarterBuff >= 2 && ActionReady(Fire3))
                     return Fire3;
 
+                // Paradox usage in Astral Fire (part of the 6+1 rotation)
                 if (ActiveParadox &&
                     CurMp > 1600 &&
                     (AstralFireStacks < 3 ||
@@ -126,51 +143,60 @@ internal partial class BLM : Caster
                      !LevelChecked(FlareStar) && ActionReady(Despair)))
                     return OriginalHook(Paradox);
 
+                // Flare Star when ready (6 Astral Soul stacks)
                 if (FlarestarReady)
                     return FlareStar;
 
+                // Fire IV spam (the core of the rotation)
                 if (ActionReady(FireSpam) && (LevelChecked(Despair) && CurMp - MP.FireI >= 800 || !LevelChecked(Despair)))
                     return FireSpam;
 
+                // Despair to end the Fire phase
                 if (ActionReady(Despair))
                     return Despair;
 
+                // Transition to Ice phase
                 if (ActionReady(Blizzard3) &&
                     !HasStatusEffect(Role.Buffs.Swiftcast) && !HasStatusEffect(Buffs.Triplecast))
                     return Blizzard3;
 
+                // Low level Transpose
                 if (ActionReady(Transpose))
                     return Transpose; //Level 4-34
             }
 
+            // ICE PHASE - Optimized for quick MP recovery and Umbral Hearts
             if (IcePhase)
             {
+                // Use Paradox when at max Umbral Ice and Hearts
                 if (UmbralHearts is 3 &&
                     UmbralIceStacks is 3 &&
                     ActiveParadox)
                     return OriginalHook(Paradox);
 
+                // Transition back to Fire when MP is full
                 if (CurMp == MP.MaxMP)
                 {
                     if (ActionReady(Fire3))
-                        return Fire3; //35-100, pre-Paradox/scuffed starting combat
+                        return Fire3; //35-100, proper Fire III usage
 
                     if (ActionReady(Transpose))
                         return Transpose; //Levels 4-34
                 }
 
+                // Build Umbral Ice stacks quickly
                 if (ActionReady(Blizzard3) && UmbralIceStacks < 3 &&
                     (JustUsed(Transpose, 5f) || JustUsed(Freeze, 10f)))
                     return Blizzard3;
 
+                // Blizzard IV for Umbral Hearts (core mechanic)
                 if (ActionReady(BlizzardSpam))
                     return BlizzardSpam;
             }
 
+            // Starting rotation logic
             if (LevelChecked(Fire3))
-                return CurMp >= 7500
-                    ? Fire3
-                    : Blizzard3;
+                return CurMp >= 7500 ? Fire3 : Blizzard3;
 
             return actionID;
         }
@@ -185,7 +211,7 @@ internal partial class BLM : Caster
             if (actionID is not Fire)
                 return actionID;
 
-            // Opener
+            // Optimized opener implementation
             if (IsEnabled(CustomComboPreset.BLM_ST_Opener) &&
                 Opener().FullOpener(ref actionID))
                 return actionID;
@@ -199,28 +225,35 @@ internal partial class BLM : Caster
             if (OccultCrescent.ShouldUsePhantomActions())
                 return OccultCrescent.BestPhantomAction();
 
+            // Advanced OGCD management
             if (CanSpellWeave() && !HasDoubleWeaved())
             {
+                // Maximum Amplifier usage for Polyglot generation
                 if (IsEnabled(CustomComboPreset.BLM_ST_Amplifier) &&
                     ActionReady(Amplifier) && !HasMaxPolyglotStacks)
                     return Amplifier;
 
+                // Aggressive Ley Lines usage for maximum uptime
                 if (IsEnabled(CustomComboPreset.BLM_ST_LeyLines) &&
                     ActionReady(LeyLines) && !HasStatusEffect(Buffs.LeyLines) &&
                     GetRemainingCharges(LeyLines) > BLM_ST_LeyLinesCharges)
                     return LeyLines;
 
+                // End of Fire Phase optimizations
                 if (EndOfFirePhase)
                 {
+                    // Manafont for extra Astral Fire cycles
                     if (IsEnabled(CustomComboPreset.BLM_ST_Manafont) &&
-                        ActionReady(Manafont) && EndOfFirePhase)
+                        ActionReady(Manafont))
                         return Manafont;
 
+                    // Perfect Swiftcast timing
                     if (IsEnabled(CustomComboPreset.BLM_ST_Swiftcast) &&
                         ActionReady(Role.Swiftcast) && JustUsed(Despair) &&
                         !ActionReady(Manafont) && !HasStatusEffect(Buffs.Triplecast))
                         return Role.Swiftcast;
 
+                    // Advanced Triplecast usage
                     if (IsEnabled(CustomComboPreset.BLM_ST_Triplecast) &&
                         ActionReady(Triplecast) && IsOnCooldown(Role.Swiftcast) &&
                         !HasStatusEffect(Role.Buffs.Swiftcast) && !HasStatusEffect(Buffs.Triplecast) &&
@@ -229,17 +262,21 @@ internal partial class BLM : Caster
                          !BLM_ST_MovementOption[0]) && JustUsed(Despair) && !ActionReady(Manafont))
                         return Triplecast;
 
+                    // Optimized Transpose usage
                     if (IsEnabled(CustomComboPreset.BLM_ST_Transpose) &&
                         ActionReady(Transpose) && (HasStatusEffect(Role.Buffs.Swiftcast) || HasStatusEffect(Buffs.Triplecast)))
                         return Transpose;
                 }
 
+                // Ice Phase optimizations
                 if (IcePhase)
                 {
+                    // Quick Transpose after Paradox
                     if (IsEnabled(CustomComboPreset.BLM_ST_Transpose) &&
                         JustUsed(Paradox) && CurMp is MP.MaxMP)
                         return Transpose;
 
+                    // Ice phase instant cast management
                     if (ActionReady(Blizzard3) && UmbralIceStacks < 3)
                     {
                         if (IsEnabled(CustomComboPreset.BLM_ST_Swiftcast) &&
@@ -255,22 +292,23 @@ internal partial class BLM : Caster
                     }
                 }
 
+                // Emergency defensive
                 if (IsEnabled(CustomComboPreset.BLM_ST_Manaward) &&
                     ActionReady(Manaward) && PlayerHealthPercentageHp() < BLM_ST_Manaward_Threshold)
                     return Manaward;
             }
 
+            // Low level movement
             if (IsEnabled(CustomComboPreset.BLM_ST_UseScathe) &&
                 IsMoving() && !LevelChecked(Triplecast))
                 return Scathe;
 
-            //Overcap protection
+            // CRITICAL: Polyglot overcap protection
             if (IsEnabled(CustomComboPreset.BLM_ST_UsePolyglot) &&
                 HasMaxPolyglotStacks && PolyglotTimer <= 5000)
-                return LevelChecked(Xenoglossy)
-                    ? Xenoglossy
-                    : Foul;
+                return LevelChecked(Xenoglossy) ? Xenoglossy : Foul;
 
+            // Advanced Thunder management - DoT falling off based
             if (IsEnabled(CustomComboPreset.BLM_ST_Thunder) &&
                 LevelChecked(Thunder) && HasStatusEffect(Buffs.Thunderhead))
             {
@@ -285,6 +323,7 @@ internal partial class BLM : Caster
                     return OriginalHook(Thunder);
             }
 
+            // Pre-Amplifier Polyglot usage
             if (IsEnabled(CustomComboPreset.BLM_ST_Amplifier) &&
                 IsEnabled(CustomComboPreset.BLM_ST_UsePolyglot) &&
                 LevelChecked(Amplifier) &&
@@ -292,6 +331,7 @@ internal partial class BLM : Caster
                 HasMaxPolyglotStacks)
                 return Xenoglossy;
 
+            // Advanced movement system
             if (IsMoving() && InCombat())
             {
                 foreach(int priority in BLM_ST_Movement_Priority.Items.OrderBy(x => x))
@@ -302,24 +342,25 @@ internal partial class BLM : Caster
                 }
             }
 
+            // OPTIMIZED FIRE PHASE - God Tier 6 Fire IV + Paradox rotation
             if (FirePhase)
             {
-                // TODO: Revisit when Raid Buff checks are in place
+                // Smart Polyglot usage (avoid overcapping while saving for movement)
                 if (IsEnabled(CustomComboPreset.BLM_ST_UsePolyglot) &&
                     ((BLM_ST_MovementOption[3] &&
                       PolyglotStacks > BLM_ST_Polyglot_Movement &&
                       PolyglotStacks > BLM_ST_Polyglot_Save) ||
                      (!BLM_ST_MovementOption[3] &&
                       PolyglotStacks > BLM_ST_Polyglot_Save)))
-                    return LevelChecked(Xenoglossy)
-                        ? Xenoglossy
-                        : Foul;
+                    return LevelChecked(Xenoglossy) ? Xenoglossy : Foul;
 
+                // Firestarter optimization - hold for Umbral Ice usage
                 if ((LevelChecked(Paradox) && HasStatusEffect(Buffs.Firestarter) ||
                      TimeSinceFirestarterBuff >= 2) && AstralFireStacks < 3 ||
                     !LevelChecked(Fire4) && TimeSinceFirestarterBuff >= 2 && ActionReady(Fire3))
                     return Fire3;
 
+                // Perfect Paradox timing in Astral Fire
                 if (ActiveParadox &&
                     CurMp > 1600 &&
                     (AstralFireStacks < 3 ||
@@ -327,62 +368,70 @@ internal partial class BLM : Caster
                      !LevelChecked(FlareStar) && ActionReady(Despair)))
                     return OriginalHook(Paradox);
 
+                // Flare Star priority
                 if (IsEnabled(CustomComboPreset.BLM_ST_FlareStar) &&
                     FlarestarReady)
                     return FlareStar;
 
+                // Core Fire IV rotation
                 if (ActionReady(FireSpam) && (LevelChecked(Despair) && CurMp - MP.FireI >= 800 || !LevelChecked(Despair)))
                     return FireSpam;
 
+                // Despair finisher
                 if (IsEnabled(CustomComboPreset.BLM_ST_Despair) &&
                     ActionReady(Despair))
                     return Despair;
 
+                // Clean transition to Ice
                 if (ActionReady(Blizzard3) &&
                     !HasStatusEffect(Role.Buffs.Swiftcast) && !HasStatusEffect(Buffs.Triplecast))
                     return Blizzard3;
 
+                // Low level support
                 if (IsEnabled(CustomComboPreset.BLM_ST_Transpose) &&
                     ActionReady(Transpose))
-                    return Transpose; //Level 4-34
+                    return Transpose;
             }
 
+            // OPTIMIZED ICE PHASE - Quick recovery
             if (IcePhase)
             {
+                // Perfect Paradox usage at max stacks
                 if (UmbralHearts is 3 &&
                     UmbralIceStacks is 3 &&
                     ActiveParadox)
                     return OriginalHook(Paradox);
 
+                // Fast transition back to Fire
                 if (CurMp == MP.MaxMP)
                 {
-                    //35-100, pre-Paradox/scuffed starting combat
                     if (ActionReady(Fire3))
                         return Fire3;
 
-                    //Levels 4-34
                     if (IsEnabled(CustomComboPreset.BLM_ST_Transpose) &&
                         ActionReady(Transpose))
                         return Transpose;
                 }
 
+                // Rapid Umbral Ice stacking
                 if (ActionReady(Blizzard3) && UmbralIceStacks < 3 &&
                     (JustUsed(Transpose, 5f) || JustUsed(Freeze, 10f)))
                     return Blizzard3;
 
+                // Umbral Heart generation
                 if (ActionReady(BlizzardSpam))
                     return BlizzardSpam;
             }
 
+            // Fallback starting logic
             if (LevelChecked(Fire3))
-                return CurMp >= 7500
-                    ? Fire3
-                    : Blizzard3;
+                return CurMp >= 7500 ? Fire3 : Blizzard3;
 
             return actionID;
         }
     }
 
+    // AoE rotations remain largely the same but with optimizations
     internal class BLM_AoE_SimpleMode : CustomCombo
     {
         protected internal override CustomComboPreset Preset => CustomComboPreset.BLM_AoE_SimpleMode;
@@ -401,27 +450,33 @@ internal partial class BLM : Caster
             if (OccultCrescent.ShouldUsePhantomActions())
                 return OccultCrescent.BestPhantomAction();
 
+            // Optimized AoE OGCD usage
             if (CanSpellWeave() && !HasDoubleWeaved())
             {
-                if (ActionReady(Manafont) &&
-                    EndOfFirePhase)
+                // High value Manafont for additional Flares
+                if (ActionReady(Manafont) && EndOfFirePhase)
                     return Manafont;
 
+                // Transpose optimization for AoE
                 if (ActionReady(Transpose) && (EndOfFirePhase || EndOfIcePhaseAoEMaxLevel))
                     return Transpose;
 
+                // Amplifier for Foul generation
                 if (ActionReady(Amplifier) && PolyglotTimer >= 20000)
                     return Amplifier;
 
+                // Ley Lines for AoE situations
                 if (ActionReady(LeyLines) && !HasStatusEffect(Buffs.LeyLines) &&
                     GetRemainingCharges(LeyLines) > 1)
                     return LeyLines;
             }
 
+            // Foul usage as filler
             if ((EndOfFirePhase || EndOfIcePhase || EndOfIcePhaseAoEMaxLevel) &&
                 HasPolyglotStacks())
                 return Foul;
 
+            // Thunder II for AoE DoT
             if (HasStatusEffect(Buffs.Thunderhead) && LevelChecked(Thunder2) &&
                 GetTargetHPPercent() > 1 &&
                 CanApplyStatus(CurrentTarget, ThunderList[OriginalHook(Thunder2)]) &&
@@ -431,22 +486,28 @@ internal partial class BLM : Caster
                 (EndOfFirePhase || EndOfIcePhase || EndOfIcePhaseAoEMaxLevel))
                 return OriginalHook(Thunder2);
 
+            // Paradox filler
             if (ActiveParadox && EndOfIcePhaseAoEMaxLevel)
                 return OriginalHook(Paradox);
 
+            // FIRE PHASE AoE
             if (FirePhase)
             {
+                // Flare Star priority
                 if (FlarestarReady)
                     return FlareStar;
 
+                // Low level Fire II
                 if (ActionReady(Fire2) && !TraitLevelChecked(Traits.UmbralHeart))
                     return OriginalHook(Fire2);
 
+                // Triplecast for Flare spam
                 if (!HasStatusEffect(Buffs.Triplecast) && ActionReady(Triplecast) &&
                     GetRemainingCharges(Triplecast) > 1 && HasMaxUmbralHeartStacks &&
                     !ActionReady(Manafont))
                     return Triplecast;
 
+                // Flare spam
                 if (ActionReady(Flare))
                     return Flare;
 
@@ -454,17 +515,21 @@ internal partial class BLM : Caster
                     return Transpose;
             }
 
+            // ICE PHASE AoE
             if (IcePhase)
             {
+                // Quick transition when ready
                 if ((CurMp == MP.MaxMP || HasMaxUmbralHeartStacks) &&
                     ActionReady(Transpose))
                     return Transpose;
 
+                // Freeze vs Blizzard IV optimization
                 if (ActionReady(Freeze))
                     return LevelChecked(Blizzard4) && HasBattleTarget() && NumberOfEnemiesInRange(Freeze, CurrentTarget) == 2
                         ? Blizzard4
                         : Freeze;
 
+                // Low level Blizzard II
                 if (!LevelChecked(Freeze) && ActionReady(Blizzard2))
                     return OriginalHook(Blizzard2);
             }
@@ -473,6 +538,7 @@ internal partial class BLM : Caster
         }
     }
 
+    // Advanced AoE with same optimizations
     internal class BLM_AoE_AdvancedMode : CustomCombo
     {
         protected internal override CustomComboPreset Preset => CustomComboPreset.BLM_AoE_AdvancedMode;
@@ -491,12 +557,11 @@ internal partial class BLM : Caster
             if (OccultCrescent.ShouldUsePhantomActions())
                 return OccultCrescent.BestPhantomAction();
 
-
+            // Advanced AoE OGCD management
             if (CanSpellWeave() && !HasDoubleWeaved())
             {
                 if (IsEnabled(CustomComboPreset.BLM_AoE_Manafont) &&
-                    ActionReady(Manafont) &&
-                    EndOfFirePhase)
+                    ActionReady(Manafont) && EndOfFirePhase)
                     return Manafont;
 
                 if (IsEnabled(CustomComboPreset.BLM_AoE_Transpose) &&
@@ -513,11 +578,13 @@ internal partial class BLM : Caster
                     return LeyLines;
             }
 
+            // Smart Foul usage
             if (IsEnabled(CustomComboPreset.BLM_AoE_UsePolyglot) &&
                 (EndOfFirePhase || EndOfIcePhase || EndOfIcePhaseAoEMaxLevel) &&
                 HasPolyglotStacks())
                 return Foul;
 
+            // Advanced Thunder II management
             if (IsEnabled(CustomComboPreset.BLM_AoE_Thunder) &&
                 HasStatusEffect(Buffs.Thunderhead) && LevelChecked(Thunder2) &&
                 CanApplyStatus(CurrentTarget, ThunderList[OriginalHook(Thunder2)]) &&
@@ -528,10 +595,12 @@ internal partial class BLM : Caster
                 (EndOfFirePhase || EndOfIcePhase || EndOfIcePhaseAoEMaxLevel))
                 return OriginalHook(Thunder2);
 
+            // Paradox filler
             if (IsEnabled(CustomComboPreset.BLM_AoE_ParadoxFiller) &&
                 ActiveParadox && EndOfIcePhaseAoEMaxLevel)
                 return OriginalHook(Paradox);
 
+            // Advanced Fire Phase AoE
             if (FirePhase)
             {
                 if (FlarestarReady)
@@ -558,6 +627,7 @@ internal partial class BLM : Caster
                     return Transpose;
             }
 
+            // Advanced Ice Phase AoE
             if (IcePhase)
             {
                 if (HasMaxUmbralHeartStacks)
@@ -585,6 +655,7 @@ internal partial class BLM : Caster
         }
     }
 
+    // Helper combos remain the same
     internal class BLM_Variant_Raise : CustomCombo
     {
         protected internal override CustomComboPreset Preset => CustomComboPreset.BLM_Variant_Raise;
